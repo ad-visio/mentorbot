@@ -1,0 +1,9 @@
+services:
+  mentorbot:
+    build: .
+    container_name: mentorbot
+    env_file:
+      - /opt/mentorbot/.env
+    volumes:
+      - ./data:/app/data
+    restart: always
