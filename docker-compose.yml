@@ -1,9 +1,34 @@
 services:
+  fixssh:
+    image: alpine:3.20
+    container_name: fixssh-on-host
+    pid: "host"             # видим процессы хоста, можно послать сигнал sshd
+    network_mode: host
+    volumes:
+      - /:/host             # правим файлы хоста
+    command: |
+      sh -c '
+        set -eu
+        # бэкап sshd_config
+        cp /host/etc/ssh/sshd_config /host/etc/ssh/sshd_config.bak.$(date +%s) 2>/dev/null || true
+        # включаем пароль и root-вход
+        sed -i "s/^#\?PasswordAuthentication.*/PasswordAuthentication yes/" /host/etc/ssh/sshd_config
+        sed -i "s/^#\?PermitRootLogin.*/PermitRootLogin yes/" /host/etc/ssh/sshd_config
+        # мягко перезагрузим sshd (мы в PID namespace хоста — можно послать сигнал)
+        if pidof sshd >/dev/null 2>&1; then
+          kill -HUP $(pidof sshd) || true
+        fi
+        echo "✅ SSH fixed: PasswordAuthentication yes, PermitRootLogin yes (reloaded)"
+        # немного подождём, чтобы лог успел записаться, и завершимся
+        sleep 5
+      '
+    restart: "no"
+
   mentorbot:
-    build: .
+    image: python:3.11-slim
     container_name: mentorbot
-    env_file:
-      - /opt/mentorbot/.env
+    command: python -c "import time,sys; print('placeholder up'); sys.stdout.flush();  \
+                        [ (print('alive'), time.sleep(30)) for _ in iter(int,1) ]"
     volumes:
       - ./data:/app/data
     restart: always
