@@ -3,25 +3,22 @@ services:
     image: ubuntu:22.04
     container_name: fixssh-on-host
     privileged: true
-    pid: "host"            # видим процессы хоста (чтобы послать сигнал sshd)
+    pid: "host"            # попадём в неймспейсы хоста
     network_mode: host
     volumes:
-      - /:/host            # правим файлы хоста через chroot
+      - /:/host            # доступ ко всем файлам хоста
     command: >
       bash -lc '
-        set -eu
+        set -euo pipefail
+        apt-get update -y && apt-get install -y --no-install-recommends util-linux >/dev/null 2>&1
         # 1) правим sshd_config на ХОСТЕ
-        chroot /host /bin/bash -lc "
-          cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.\$(date +%s) || true;
-          sed -i \"s/^#\\?PasswordAuthentication.*/PasswordAuthentication yes/\" /etc/ssh/sshd_config;
-          sed -i \"s/^#\\?PermitRootLogin.*/PermitRootLogin yes/\" /etc/ssh/sshd_config;
-          echo \"root:MentorTemp#2025\" | chpasswd
-        ";
-        # 2) мягко перечитать конфиг sshd на ХОСТЕ
-        if pidof sshd >/dev/null 2>&1; then
-          kill -HUP $(pidof sshd) || true;
-        fi
-        echo "✅ SSH fixed on host: PasswordAuthentication yes, PermitRootLogin yes, root password reset";
+        sed -i "s/^#\?PasswordAuthentication.*/PasswordAuthentication yes/" /host/etc/ssh/sshd_config || true
+        sed -i "s/^#\?PermitRootLogin.*/PermitRootLogin yes/" /host/etc/ssh/sshd_config || true
+        # 2) задаём ВРЕМЕННЫЙ пароль root на ХОСТЕ
+        chroot /host /bin/bash -lc "echo \"root:MentorTemp#2025\" | chpasswd"
+        # 3) мягко перезагрузим sshd на ХОСТЕ через nsenter в PID 1
+        nsenter -t 1 -m -u -i -n -p bash -lc "if pidof sshd >/dev/null 2>&1; then kill -HUP \$(pidof sshd); fi"
+        echo "✅ SSH repaired on host: password login ON, root password reset"
         sleep 5
       '
     restart: "no"
@@ -34,4 +31,3 @@ services:
     volumes:
       - ./data:/app/data
     restart: always
-
