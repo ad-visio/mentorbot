@@ -1,9 +1,0 @@
-name: Deploy to VPS
-on:
-  workflow_dispatch: {}   # Только ручной запуск. На пуш НЕ запускается.
-
-jobs:
-  paused:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Deploy paused for debugging"
