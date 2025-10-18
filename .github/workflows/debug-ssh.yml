@@ -1,0 +1,23 @@
+name: Debug SSH
+on:
+  workflow_dispatch: {}
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write SSH key (no CRLF)
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.VPS_SSH_KEY }}" | sed 's/\r$//' > ~/.ssh/id_dbg
+          chmod 600 ~/.ssh/id_dbg
+      - name: Derive PUBLIC from secret (safe to print)
+        run: |
+          PUB=$(ssh-keygen -y -f ~/.ssh/id_dbg)
+          echo "RUNNER_PUB:"
+          echo "$PUB"
+          echo "RUNNER_FINGERPRINT:"
+          echo "$PUB" | ssh-keygen -lf -
+      - name: Try SSH once
+        run: |
+          ssh -i ~/.ssh/id_dbg -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo OK" || true
